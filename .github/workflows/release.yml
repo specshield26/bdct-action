@@ -1,0 +1,55 @@
+# On every immutable release tag (vMAJOR.MINOR.PATCH), do two things:
+#
+#   1. Move the floating major-version tag (v1, v2, ...) to point at this commit.
+#      This is what most users pin against.
+#   2. Create the matching GitHub Release. The Marketplace listing is updated
+#      automatically when the release is published with "Publish to Marketplace"
+#      ticked (one-time manual step on the first release).
+#
+# Trigger: push a tag like v1.2.0. Do not push v1 directly — this workflow does it.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive the major version
+        id: major
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          MAJOR="${TAG%%.*}"   # v1.2.3 -> v1
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
+
+      - name: Move the floating major tag
+        env:
+          MAJOR: ${{ steps.major.outputs.major }}
+          TAG:   ${{ steps.major.outputs.tag }}
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag -f "$MAJOR" "$TAG"
+          git push origin -f "refs/tags/$MAJOR"
+          echo "✔ $MAJOR now points at $TAG"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG:      ${{ steps.major.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes

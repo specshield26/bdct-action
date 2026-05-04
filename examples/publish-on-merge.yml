@@ -1,0 +1,45 @@
+# Publish the latest provider spec on every push to main.
+# Auto-verification re-runs all consumer contracts so the matrix is always current.
+name: BDCT Publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/openapi.yaml'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish provider spec
+        uses: specshield26/bdct-action@v1
+        with:
+          command: publish-provider
+          org: ${{ vars.SPECSHIELD_ORG }}
+          provider: payment-service
+          version: ${{ github.sha }}
+          spec: ./api/openapi.yaml
+          env: production
+          branch: main
+          api-token: ${{ secrets.SPECSHIELD_API_KEY }}
+          # cli-version: '3.0.0'  # pin in production
+
+  # Same pattern for a consumer team — uncomment if this repo owns a consumer contract:
+  #
+  # publish-consumer:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: specshield26/bdct-action@v1
+  #       with:
+  #         command: publish-consumer
+  #         org: ${{ vars.SPECSHIELD_ORG }}
+  #         consumer: checkout-ui
+  #         provider: payment-service
+  #         version: ${{ github.sha }}
+  #         contract: ./contracts/payment-service.yaml
+  #         format: OPENAPI
+  #         api-token: ${{ secrets.SPECSHIELD_API_KEY }}

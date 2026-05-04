@@ -1,0 +1,237 @@
+name: 'SpecShield BDCT'
+description: 'Bi-Directional Contract Testing for OpenAPI: publish provider/consumer specs, verify compatibility, and gate deployments with can-i-deploy.'
+author: 'SpecShield'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  command:
+    description: |
+      BDCT subcommand to run. One of:
+        publish-provider | publish-consumer | verify | can-i-deploy |
+        matrix | list-providers | list-consumers
+    required: true
+
+  api-token:
+    description: 'SpecShield API key. Recommended: pass ${{ secrets.SPECSHIELD_API_KEY }}.'
+    required: true
+
+  org:
+    description: 'Organization key. Required by every BDCT subcommand.'
+    required: true
+
+  # ── command-specific inputs (optional at the action level; CLI validates) ──
+
+  provider:
+    description: 'Provider service name. Required by publish-provider, publish-consumer, verify, list-* (as filter).'
+    required: false
+  consumer:
+    description: 'Consumer service name. Required by publish-consumer, verify, list-consumers (as filter).'
+    required: false
+  service:
+    description: 'Service name for can-i-deploy (consumer or provider).'
+    required: false
+
+  version:
+    description: 'Version tag. Used by publish-provider, publish-consumer, can-i-deploy.'
+    required: false
+  consumer-version:
+    description: 'Consumer version. Required by verify.'
+    required: false
+  provider-version:
+    description: 'Provider version. Required by verify.'
+    required: false
+
+  spec:
+    description: 'Path to provider OpenAPI spec file. Required by publish-provider.'
+    required: false
+  contract:
+    description: 'Path to consumer contract file (OpenAPI YAML/JSON or Pact JSON). Required by publish-consumer.'
+    required: false
+  format:
+    description: 'Consumer contract format: OPENAPI | PACT. Default OPENAPI.'
+    required: false
+  branch:
+    description: 'Optional Git branch tag stored alongside a provider spec.'
+    required: false
+  env:
+    description: 'Environment label (e.g. staging, production). Default applies per command.'
+    required: false
+
+  # ── runtime knobs ──
+
+  cli-version:
+    description: 'specshield CLI version to install. Default "latest"; pin (e.g. 3.0.0) in production.'
+    required: false
+    default: 'latest'
+  server:
+    description: 'SpecShield server URL. Override only for self-hosted / staging.'
+    required: false
+    default: 'https://specshield.io'
+  fail-on-error:
+    description: 'Fail the action when the CLI exits non-zero (default true). Set false to inspect outputs first.'
+    required: false
+    default: 'true'
+
+outputs:
+  json:
+    description: 'Raw CLI JSON response (always set when the CLI ran).'
+    value: ${{ steps.run.outputs.json }}
+  exit-code:
+    description: 'CLI exit code (0 = clean / deployable, 1 = breaking / not deployable, 2 = config / runtime error).'
+    value: ${{ steps.run.outputs.exit-code }}
+  deployable:
+    description: 'true / false — populated after `can-i-deploy`.'
+    value: ${{ steps.run.outputs.deployable }}
+  verification-id:
+    description: 'Numeric verification id — populated after `verify`.'
+    value: ${{ steps.run.outputs.verification-id }}
+  status:
+    description: 'COMPATIBLE / INCOMPATIBLE — populated after `verify`.'
+    value: ${{ steps.run.outputs.status }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Cache global npm install
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: specshield-cli-${{ inputs.cli-version }}-${{ runner.os }}
+
+    - name: Install SpecShield CLI
+      shell: bash
+      run: |
+        echo "::group::Installing specshield@${{ inputs.cli-version }}"
+        npm install -g "specshield@${{ inputs.cli-version }}"
+        specshield --version
+        echo "::endgroup::"
+
+    - name: Run SpecShield BDCT command
+      id: run
+      shell: bash
+      env:
+        SPECSHIELD_API_KEY: ${{ inputs.api-token }}
+        SS_COMMAND: ${{ inputs.command }}
+        SS_ORG: ${{ inputs.org }}
+        SS_PROVIDER: ${{ inputs.provider }}
+        SS_CONSUMER: ${{ inputs.consumer }}
+        SS_SERVICE: ${{ inputs.service }}
+        SS_VERSION: ${{ inputs.version }}
+        SS_CONSUMER_VERSION: ${{ inputs.consumer-version }}
+        SS_PROVIDER_VERSION: ${{ inputs.provider-version }}
+        SS_SPEC: ${{ inputs.spec }}
+        SS_CONTRACT: ${{ inputs.contract }}
+        SS_FORMAT: ${{ inputs.format }}
+        SS_BRANCH: ${{ inputs.branch }}
+        SS_ENV: ${{ inputs.env }}
+        SS_SERVER: ${{ inputs.server }}
+        SS_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+      run: |
+        set -uo pipefail
+
+        VALID="publish-provider publish-consumer verify can-i-deploy matrix list-providers list-consumers"
+        case " $VALID " in
+          *" $SS_COMMAND "*) ;;
+          *)
+            echo "::error::Invalid command '$SS_COMMAND'. Must be one of: $VALID"
+            exit 2
+            ;;
+        esac
+
+        ARGS=(bdct "$SS_COMMAND" --json --org "$SS_ORG" --server "$SS_SERVER")
+
+        # Conditionally append every optional flag the user passed.
+        [ -n "$SS_PROVIDER" ]         && ARGS+=(--provider         "$SS_PROVIDER")
+        [ -n "$SS_CONSUMER" ]         && ARGS+=(--consumer         "$SS_CONSUMER")
+        [ -n "$SS_SERVICE" ]          && ARGS+=(--service          "$SS_SERVICE")
+        [ -n "$SS_VERSION" ]          && ARGS+=(--version          "$SS_VERSION")
+        [ -n "$SS_CONSUMER_VERSION" ] && ARGS+=(--consumer-version "$SS_CONSUMER_VERSION")
+        [ -n "$SS_PROVIDER_VERSION" ] && ARGS+=(--provider-version "$SS_PROVIDER_VERSION")
+        [ -n "$SS_SPEC" ]             && ARGS+=(--spec             "$SS_SPEC")
+        [ -n "$SS_CONTRACT" ]         && ARGS+=(--contract         "$SS_CONTRACT")
+        [ -n "$SS_FORMAT" ]           && ARGS+=(--format           "$SS_FORMAT")
+        [ -n "$SS_BRANCH" ]           && ARGS+=(--branch           "$SS_BRANCH")
+        [ -n "$SS_ENV" ]              && ARGS+=(--env              "$SS_ENV")
+
+        echo "::group::specshield ${ARGS[*]}"
+        # Capture stdout (the JSON) separately from stderr (CLI's progress / errors).
+        TMP_OUT=$(mktemp)
+        set +e
+        specshield "${ARGS[@]}" >"$TMP_OUT"
+        EXIT_CODE=$?
+        set -e
+        OUT="$(cat "$TMP_OUT")"
+        rm -f "$TMP_OUT"
+        echo "exit=$EXIT_CODE"
+        echo "$OUT"
+        echo "::endgroup::"
+
+        # Always emit the raw JSON + exit code as outputs.
+        {
+          DELIM="EOF_$(date +%s%N)"
+          echo "json<<$DELIM"
+          echo "$OUT"
+          echo "$DELIM"
+          echo "exit-code=$EXIT_CODE"
+        } >>"$GITHUB_OUTPUT"
+
+        # Typed outputs for the two commands users branch on.
+        if command -v jq >/dev/null 2>&1 && [ -n "$OUT" ] && echo "$OUT" | jq empty >/dev/null 2>&1; then
+          case "$SS_COMMAND" in
+            can-i-deploy)
+              DEPLOYABLE=$(echo "$OUT" | jq -r '.deployable // empty')
+              [ -n "$DEPLOYABLE" ] && echo "deployable=$DEPLOYABLE" >>"$GITHUB_OUTPUT"
+              ;;
+            verify)
+              VID=$(echo "$OUT" | jq -r '.id // empty')
+              STATUS=$(echo "$OUT" | jq -r '.status // empty')
+              [ -n "$VID" ]    && echo "verification-id=$VID" >>"$GITHUB_OUTPUT"
+              [ -n "$STATUS" ] && echo "status=$STATUS"        >>"$GITHUB_OUTPUT"
+              ;;
+          esac
+        fi
+
+        # Step summary — surfaces the result on the GitHub Actions run page.
+        {
+          echo "### SpecShield: \`$SS_COMMAND\`"
+          echo ""
+          case "$SS_COMMAND" in
+            can-i-deploy)
+              if [ "$EXIT_CODE" = "0" ]; then
+                echo "✅ **Deployable** — \`$SS_SERVICE@$SS_VERSION\`${SS_ENV:+ in $SS_ENV}"
+              else
+                echo "❌ **Not deployable** — \`$SS_SERVICE@$SS_VERSION\`${SS_ENV:+ in $SS_ENV}"
+                REASON=$(echo "$OUT" | jq -r '.reason // empty' 2>/dev/null || true)
+                [ -n "$REASON" ] && echo "" && echo "**Reason:** $REASON"
+              fi
+              ;;
+            verify)
+              if [ "$EXIT_CODE" = "0" ]; then
+                echo "✅ **COMPATIBLE** — \`$SS_CONSUMER@$SS_CONSUMER_VERSION\` → \`$SS_PROVIDER@$SS_PROVIDER_VERSION\`"
+              else
+                echo "❌ **INCOMPATIBLE** — \`$SS_CONSUMER@$SS_CONSUMER_VERSION\` → \`$SS_PROVIDER@$SS_PROVIDER_VERSION\`"
+              fi
+              ;;
+            publish-provider|publish-consumer)
+              [ "$EXIT_CODE" = "0" ] && echo "✅ Published" || echo "❌ Publish failed"
+              ;;
+            *)
+              echo "Exit code: \`$EXIT_CODE\`"
+              ;;
+          esac
+        } >>"$GITHUB_STEP_SUMMARY"
+
+        if [ "$SS_FAIL_ON_ERROR" = "true" ] && [ "$EXIT_CODE" -ne 0 ]; then
+          echo "::error::SpecShield CLI exited with code $EXIT_CODE"
+          exit "$EXIT_CODE"
+        fi
+
+        exit 0

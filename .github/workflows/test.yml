@@ -1,0 +1,115 @@
+# Self-test for the action.
+#
+# Two jobs:
+#   1. lint — always runs. Cheap structural checks; no secrets needed.
+#   2. integration — runs only when SPECSHIELD_TEST_API_KEY is set in the repo
+#      secrets. Exercises publish-provider + can-i-deploy against a Pro test org.
+#
+# To run integration tests on your fork: add a Pro-plan API key as
+# repo secret SPECSHIELD_TEST_API_KEY and an org variable SPECSHIELD_TEST_ORG.
+
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: action.yml is valid YAML
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('action.yml'))"
+          echo "✔ action.yml parses"
+
+      - name: action.yml advertises the expected top-level keys
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          a = yaml.safe_load(open('action.yml'))
+          for k in ('name','description','author','branding','inputs','outputs','runs'):
+              assert k in a, f'missing top-level key: {k}'
+          assert a['runs']['using'] == 'composite', 'must be a composite action'
+          required = ['command','api-token','org']
+          for r in required:
+              assert a['inputs'][r].get('required') is True, f'{r} must be required'
+          PY
+          echo "✔ structure checks pass"
+
+      - name: Examples reference @v1
+        run: |
+          if grep -RnE 'specshield26/bdct-action@(main|master)\b' examples; then
+            echo "::error::Examples must use @v1 (or a pinned @vX.Y.Z), not @main."
+            exit 1
+          fi
+          echo "✔ examples are pinned to @v1 / @vX.Y.Z"
+
+      - name: README inputs section matches action.yml
+        run: |
+          python3 - <<'PY'
+          import yaml, re, sys
+          a = yaml.safe_load(open('action.yml'))
+          declared = set(a['inputs'].keys())
+          readme = open('README.md').read()
+          # Inputs are listed as `| `name` | ...` in the inputs table.
+          documented = set(re.findall(r'^\|\s+`([a-z-]+)`\s+\|', readme, re.M))
+          missing = declared - documented
+          if missing:
+              print('Inputs declared in action.yml but not documented in README:', missing)
+              sys.exit(1)
+          PY
+          echo "✔ all inputs documented in README"
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if no test credentials
+        id: gate
+        run: |
+          if [ -z "${{ secrets.SPECSHIELD_TEST_API_KEY }}" ]; then
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Integration tests skipped — no SPECSHIELD_TEST_API_KEY secret."
+          else
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish a fixture provider spec
+        if: steps.gate.outputs.skipped != 'true'
+        uses: ./
+        with:
+          command: publish-provider
+          org: ${{ vars.SPECSHIELD_TEST_ORG }}
+          provider: bdct-action-fixture
+          version: ${{ github.run_id }}
+          spec: ./examples/fixtures/openapi.yaml
+          env: ci
+          api-token: ${{ secrets.SPECSHIELD_TEST_API_KEY }}
+
+      - id: gate-step
+        if: steps.gate.outputs.skipped != 'true'
+        name: can-i-deploy on the fixture
+        uses: ./
+        with:
+          command: can-i-deploy
+          org: ${{ vars.SPECSHIELD_TEST_ORG }}
+          service: bdct-action-fixture
+          version: ${{ github.run_id }}
+          env: ci
+          api-token: ${{ secrets.SPECSHIELD_TEST_API_KEY }}
+
+      - name: Assert deployable
+        if: steps.gate.outputs.skipped != 'true'
+        run: |
+          if [ "${{ steps.gate-step.outputs.deployable }}" != "true" ]; then
+            echo "::error::Expected deployable=true on a fixture with no consumers."
+            exit 1
+          fi
+          echo "✔ deployable=true"

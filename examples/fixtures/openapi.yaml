@@ -1,0 +1,56 @@
+openapi: 3.0.0
+info:
+  title: Demo Payment Service
+  description: Tiny fixture spec used by the action's test workflow.
+  version: 1.0.0
+paths:
+  /payments/{id}:
+    get:
+      operationId: getPayment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: Not found
+  /payments:
+    post:
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId, amount, currency]
+              properties:
+                orderId:  { type: string }
+                amount:   { type: integer }
+                currency: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+components:
+  schemas:
+    Payment:
+      type: object
+      required: [id, status, amount, currency]
+      properties:
+        id:        { type: string }
+        status:    { type: string, enum: [CREATED, AUTHORIZED, CAPTURED, FAILED] }
+        amount:    { type: integer }
+        currency:  { type: string }
+        createdAt: { type: string, format: date-time }

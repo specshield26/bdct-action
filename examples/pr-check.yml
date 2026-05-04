@@ -1,0 +1,87 @@
+# Run BDCT on every pull request that changes the OpenAPI spec.
+# Fails the PR check if the change would break a published consumer.
+name: BDCT PR Check
+
+on:
+  pull_request:
+    paths:
+      - 'api/openapi.yaml'
+
+jobs:
+  bdct-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. Publish the candidate spec under a PR-scoped version so it can be verified
+      #    against the existing consumer contracts without overwriting the main spec.
+      - name: Publish PR-scoped provider spec
+        uses: specshield26/bdct-action@v1
+        with:
+          command: publish-provider
+          org: ${{ vars.SPECSHIELD_ORG }}
+          provider: payment-service
+          version: pr-${{ github.event.pull_request.number }}
+          spec: ./api/openapi.yaml
+          env: pr-preview
+          branch: ${{ github.head_ref }}
+          api-token: ${{ secrets.SPECSHIELD_API_KEY }}
+          # Pin in production for reproducibility:
+          # cli-version: '3.0.0'
+
+      # 2. Ask the engine whether this provider version can deploy. Because the action
+      #    above triggered auto-verification of every consumer, this gate sees the
+      #    real verdict.
+      - id: gate
+        name: Can I deploy this PR's provider?
+        uses: specshield26/bdct-action@v1
+        with:
+          command: can-i-deploy
+          org: ${{ vars.SPECSHIELD_ORG }}
+          service: payment-service
+          version: pr-${{ github.event.pull_request.number }}
+          env: pr-preview
+          api-token: ${{ secrets.SPECSHIELD_API_KEY }}
+          fail-on-error: false
+
+      # 3. Comment on the PR with the verdict so reviewers see it without leaving GitHub.
+      - name: Comment verdict
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployable = '${{ steps.gate.outputs.deployable }}' === 'true';
+            const json = JSON.parse(`${{ steps.gate.outputs.json }}`);
+            const lines = [];
+            if (deployable) {
+              lines.push('### ✅ SpecShield BDCT — Compatible');
+              lines.push('');
+              lines.push('No published consumer contracts would break with this change.');
+            } else {
+              lines.push('### ❌ SpecShield BDCT — Incompatible');
+              lines.push('');
+              lines.push(`**Reason:** ${json.reason || 'Verification failed'}`);
+              if (Array.isArray(json.verifications)) {
+                const blockers = json.verifications.filter(v => v.status !== 'COMPATIBLE');
+                if (blockers.length) {
+                  lines.push('');
+                  lines.push('| Consumer | Version | Status |');
+                  lines.push('|---|---|---|');
+                  for (const v of blockers) {
+                    lines.push(`| \`${v.consumerName}\` | \`${v.consumerVersion}\` | ${v.status} |`);
+                  }
+                }
+              }
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: lines.join('\n'),
+            });
+
+      # 4. Fail the PR check explicitly if not deployable so the merge button is blocked.
+      - name: Enforce gate
+        if: steps.gate.outputs.deployable != 'true'
+        run: |
+          echo "::error::This PR breaks one or more published consumer contracts."
+          exit 1

@@ -1,0 +1,47 @@
+# Hard-gate the production deploy on contract compatibility.
+# This is the canonical use of `can-i-deploy`: every release must pass it
+# before the deploy job runs.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      deployable: ${{ steps.gate.outputs.deployable }}
+    steps:
+      - id: gate
+        uses: specshield26/bdct-action@v1
+        with:
+          command: can-i-deploy
+          org: ${{ vars.SPECSHIELD_ORG }}
+          service: payment-service
+          version: ${{ github.ref_name }}   # the tag, e.g. v2.4.0
+          env: production
+          api-token: ${{ secrets.SPECSHIELD_API_KEY }}
+          # cli-version: '3.0.0'  # pin in production
+
+  deploy:
+    needs: gate
+    if: needs.gate.outputs.deployable == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./deploy.sh
+
+  notify-blocked:
+    needs: gate
+    if: needs.gate.outputs.deployable != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post Slack message
+        env:
+          WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -fsSL -X POST -H 'Content-type: application/json' \
+            -d "{\"text\":\"🚫 ${{ github.ref_name }} blocked by SpecShield BDCT — see ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$WEBHOOK"
