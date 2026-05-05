@@ -1,6 +1,6 @@
 name: 'SpecShield BDCT'
-description: 'Bi-Directional Contract Testing for OpenAPI: publish provider/consumer specs, verify compatibility, and gate deployments with can-i-deploy.'
-author: 'SpecShield'
+description: 'Bi-Directional Contract Testing for OpenAPI in CI/CD — publish specs, verify compatibility, and gate deployments.'
+author: 'specshield26'
 
 branding:
   icon: 'shield'
