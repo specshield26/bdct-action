@@ -22,7 +22,7 @@ jobs:
           version: ${{ github.ref_name }}   # the tag, e.g. v2.4.0
           env: production
           api-token: ${{ secrets.SPECSHIELD_API_KEY }}
-          # cli-version: '3.0.0'  # pin in production
+          # cli-version is '3.1.1' by default; override only if you need a different release
 
   deploy:
     needs: gate

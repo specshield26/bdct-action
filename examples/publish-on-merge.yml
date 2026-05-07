@@ -25,7 +25,7 @@ jobs:
           env: production
           branch: main
           api-token: ${{ secrets.SPECSHIELD_API_KEY }}
-          # cli-version: '3.0.0'  # pin in production
+          # cli-version is '3.1.1' by default; override only if you need a different release
 
   # Same pattern for a consumer team — uncomment if this repo owns a consumer contract:
   #

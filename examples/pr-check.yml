@@ -27,7 +27,7 @@ jobs:
           branch: ${{ github.head_ref }}
           api-token: ${{ secrets.SPECSHIELD_API_KEY }}
           # Pin in production for reproducibility:
-          # cli-version: '3.0.0'
+          # cli-version is '3.1.1' by default; override only if you need a different release
 
       # 2. Ask the engine whether this provider version can deploy. Because the action
       #    above triggered auto-verification of every consumer, this gate sees the
