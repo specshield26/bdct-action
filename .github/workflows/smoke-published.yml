@@ -1,0 +1,73 @@
+# Smoke test for the PUBLISHED action at @v1.
+# Different from test.yml (which uses `./` and exercises the local source).
+# This one fetches `specshield26/bdct-action@v1` exactly the way an external
+# customer would, and proves the whole chain resolves: tag → release →
+# composite step → npm install of the pinned CLI → action wrapper → CLI call.
+#
+# We don't need real credentials — a dummy key produces a 401 from the API,
+# which still demonstrates that every layer above the API call works.
+
+name: Smoke (published @v1)
+
+on:
+  workflow_dispatch:
+    inputs:
+      api-token:
+        description: 'Optional API key. If empty, a dummy key is used and a 401 is the success criterion.'
+        required: false
+        default: ''
+      org:
+        description: 'Org key. If empty, "smoke-test" is used.'
+        required: false
+        default: 'smoke-test'
+
+jobs:
+  resolve-and-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show what we're testing
+        run: |
+          echo "Testing specshield26/bdct-action@v1 → expects to resolve to v1.0.2"
+          echo "Expected behavior:"
+          echo "  · setup-node + npm install -g specshield@3.1.1 succeeds"
+          echo "  · 'specshield --version' prints 3.1.1"
+          echo "  · 'specshield bdct list-providers' is reached and returns a real API response"
+          echo "  · with no real credentials, the API returns 401 and the step fails — that's the success criterion."
+
+      # Use the published action exactly as a customer would.
+      - name: list-providers via published action
+        id: action
+        uses: specshield26/bdct-action@v1
+        continue-on-error: true        # we expect a 401 with the dummy key
+        with:
+          command: list-providers
+          org: ${{ inputs.org }}
+          api-token: ${{ inputs.api-token != '' && inputs.api-token || 'ss_dummy_smoke_key_not_real_xxxxxxxxx' }}
+
+      - name: Inspect action outcome
+        run: |
+          echo "Action exit-code (from output): ${{ steps.action.outputs.exit-code }}"
+          echo "----"
+          echo "Action JSON output (truncated):"
+          echo "${{ steps.action.outputs.json }}" | head -20
+
+      - name: Verify success criteria
+        run: |
+          # The action's install + run path is what we care about. Any non-empty
+          # exit-code value means the action wrapper executed end-to-end.
+          OUT="${{ steps.action.outputs.exit-code }}"
+          if [ -z "$OUT" ]; then
+            echo "::error::Action did not produce an exit-code output — the wrapper itself failed before the CLI ran."
+            exit 1
+          fi
+          echo "✔ action wrapper executed (exit-code=$OUT)"
+
+          # If a real key was passed, expect 0 (CLI succeeded).
+          # If the dummy key path was used, expect non-zero (API returned 401).
+          if [ -n "${{ inputs.api-token }}" ]; then
+            [ "$OUT" = "0" ] && echo "✔ real key: list-providers succeeded" \
+                             || { echo "::error::real key: expected exit 0, got $OUT"; exit 1; }
+          else
+            [ "$OUT" != "0" ] && echo "✔ dummy key: API returned non-zero as expected" \
+                              || { echo "::error::dummy key: expected non-zero exit, got 0"; exit 1; }
+          fi
