@@ -15,7 +15,7 @@ inputs:
     required: true
 
   api-token:
-    description: 'SpecShield API key. Recommended: pass ${{ secrets.SPECSHIELD_API_KEY }}.'
+    description: 'SpecShield API key. Pass via a repo secret (e.g. secrets.SPECSHIELD_API_KEY).'
     required: true
 
   org:
