@@ -65,7 +65,7 @@ inputs:
   cli-version:
     description: 'specshield CLI version to install. Pinned to a specific release for reproducibility — override to "latest" or another version explicitly if you want the latest published.'
     required: false
-    default: '3.1.1'
+    default: '3.2.1'
   server:
     description: 'SpecShield server URL. Override only for self-hosted / staging.'
     required: false

@@ -83,7 +83,7 @@ The three idiomatic entry points are in [`examples/`](examples) — copy any of 
 | `format`           | optional, for `publish-consumer`  | `OPENAPI`                | Contract format: `OPENAPI` or `PACT`. |
 | `branch`           | optional                          | —                        | Git branch tag stored alongside a provider spec (purely informational). |
 | `env`              | optional                          | —                        | Environment label (e.g. `staging`, `production`). |
-| `cli-version`      | optional                          | `3.1.1`                  | npm version of the `specshield` CLI to install. Pinned by default for reproducible builds; pass `latest` to follow the newest published release. |
+| `cli-version`      | optional                          | `3.2.1`                  | npm version of the `specshield` CLI to install. Pinned by default for reproducible builds; pass `latest` to follow the newest published release. |
 | `server`           | optional                          | `https://specshield.io`  | API base URL. Override only for self-hosted or staging environments. |
 | `fail-on-error`    | optional                          | `true`                   | Set `false` if you want to inspect outputs in a later step before failing the job. |
 
@@ -146,9 +146,9 @@ This action follows [GitHub's recommended major-version pattern](https://docs.gi
 
 | `cli-version` | Notes                                                                                |
 | ------------- | ------------------------------------------------------------------------------------ |
-| `3.1.1` *(default)* | Pinned by this action's `v1.0.2` release. Includes the `--json` exit-code fix that the action's typed outputs depend on. |
-| `3.1.x`       | Full BDCT + `specshield init` wizard + `.specshield.yml` config defaulting.          |
-| `3.0.x`       | Full BDCT but the action's `--json` exit-code path returns 0 even when `deployable: false`. **Avoid** — use `3.1.1` or newer. |
+| `3.2.1` *(default)* | Latest. Includes the diff-engine fixes shipped 2026-05-19 (additions/modifications visible by default, schema-component dedupe via `affectedEndpoints`, constraint detection, OpenAPI input validation, Java POM `<parent>` skip, `init --print` no-prompt). |
+| `3.1.x`       | Earlier-pinned default. Full BDCT + `specshield init` wizard + `.specshield.yml` config defaulting. Compatible with the action; missing the 2026-05-19 diff fixes. |
+| `3.0.x`       | Full BDCT but the action's `--json` exit-code path returns 0 even when `deployable: false`. **Avoid** — use `3.1.x` or newer. |
 | `<3.0`        | **Not supported.**                                                                    |
 
 ---

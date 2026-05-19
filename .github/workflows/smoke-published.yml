@@ -27,10 +27,10 @@ jobs:
     steps:
       - name: Show what we're testing
         run: |
-          echo "Testing specshield26/bdct-action@v1 → expects to resolve to v1.0.2"
+          echo "Testing specshield26/bdct-action@v1 → expects to resolve to v1.0.3"
           echo "Expected behavior:"
-          echo "  · setup-node + npm install -g specshield@3.1.1 succeeds"
-          echo "  · 'specshield --version' prints 3.1.1"
+          echo "  · setup-node + npm install -g specshield@3.2.1 succeeds"
+          echo "  · 'specshield --version' prints 3.2.1"
           echo "  · 'specshield bdct list-providers' is reached and returns a real API response"
           echo "  · with no real credentials, the API returns 401 and the step fails — that's the success criterion."
 
