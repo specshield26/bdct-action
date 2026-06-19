@@ -1,6 +1,6 @@
 name: 'SpecShield BDCT'
 description: 'Bi-Directional Contract Testing for OpenAPI in CI/CD — publish specs, verify compatibility, and gate deployments.'
-author: 'specshield26'
+author: 'SpecShield Software Private Limited'
 
 branding:
   icon: 'shield'
@@ -63,9 +63,9 @@ inputs:
   # ── runtime knobs ──
 
   cli-version:
-    description: 'specshield CLI version to install. Pinned to a specific release for reproducibility — override to "latest" or another version explicitly if you want the latest published.'
+    description: 'specshield CLI version to install. Defaults to the latest 3.3.x patch (semver "~3.3.0"), so bug-fix releases roll out automatically while staying on the 3.3 minor. Override with an exact version (e.g. "3.3.0") to pin, or "latest" for the newest published.'
     required: false
-    default: '3.2.1'
+    default: '~3.3.0'
   server:
     description: 'SpecShield server URL. Override only for self-hosted / staging.'
     required: false
