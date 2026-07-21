@@ -62,6 +62,18 @@ inputs:
 
   # ── runtime knobs ──
 
+  # ── governance-gate inputs ──
+
+  min-score:
+    description: 'governance-gate: minimum compliance score (0–100) required to pass. Default 70.'
+    required: false
+  fail-on-warning:
+    description: 'governance-gate: fail when any warning-severity finding is present (default false).'
+    required: false
+  ruleset:
+    description: 'governance-gate: path to a custom portable (Spectral-format) ruleset file. Omit to use the built-in ruleset.'
+    required: false
+
   cli-version:
     description: 'specshield CLI version to install. Defaults to the latest 3.3.x patch (semver "~3.3.0"), so bug-fix releases roll out automatically while staying on the 3.3 minor. Override with an exact version (e.g. "3.3.0") to pin, or "latest" for the newest published.'
     required: false
@@ -91,6 +103,15 @@ outputs:
   status:
     description: 'COMPATIBLE / INCOMPATIBLE — populated after `verify`.'
     value: ${{ steps.run.outputs.status }}
+  passed:
+    description: 'true / false — populated after `governance-gate`.'
+    value: ${{ steps.run.outputs.passed }}
+  score:
+    description: 'compliance score (0–100) — populated after `governance-gate`.'
+    value: ${{ steps.run.outputs.score }}
+  grade:
+    description: 'A–F compliance grade — populated after `governance-gate`.'
+    value: ${{ steps.run.outputs.grade }}
 
 runs:
   using: 'composite'
@@ -134,10 +155,13 @@ runs:
         SS_ENV: ${{ inputs.env }}
         SS_SERVER: ${{ inputs.server }}
         SS_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+        SS_MIN_SCORE: ${{ inputs.min-score }}
+        SS_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
+        SS_RULESET: ${{ inputs.ruleset }}
       run: |
         set -uo pipefail
 
-        VALID="publish-provider publish-consumer verify can-i-deploy matrix list-providers list-consumers"
+        VALID="publish-provider publish-consumer verify can-i-deploy matrix list-providers list-consumers governance-gate"
         case " $VALID " in
           *" $SS_COMMAND "*) ;;
           *)
@@ -145,6 +169,91 @@ runs:
             exit 2
             ;;
         esac
+
+        # ── governance-gate: call the governance deploy gate directly (no CLI dep) ──
+        # Fails the job when the gate verdict is `passed=false`, so a PR can be blocked
+        # on API-governance policy. Spec is read from the `spec` input (a file path).
+        if [ "$SS_COMMAND" = "governance-gate" ]; then
+          if [ -z "$SS_SPEC" ] || [ ! -f "$SS_SPEC" ]; then
+            echo "::error::governance-gate requires 'spec' to point to an OpenAPI file (got '$SS_SPEC')"
+            exit 2
+          fi
+          BASE="${SS_SERVER%/}"
+
+          # Build the JSON request with jq so spec/ruleset content is safely encoded
+          # (never interpolated into a shell string).
+          POLICY=$(jq -n \
+            --arg ms "$SS_MIN_SCORE" --arg fw "$SS_FAIL_ON_WARNING" \
+            '{}
+             | (if $ms != "" then .minScore = ($ms|tonumber) else . end)
+             | (if $fw != "" then .failOnWarning = ($fw == "true") else . end)')
+
+          REQ=$(jq -n \
+            --rawfile spec "$SS_SPEC" \
+            --argjson policy "$POLICY" \
+            --arg org "$SS_ORG" \
+            --arg ruleset "${SS_RULESET:-}" \
+            '{spec: $spec, policy: $policy}
+             | (if $org != "" then .orgKey = $org else . end)
+             | (if $ruleset != "" then .ruleset = ($ruleset) else . end)')
+          if [ -n "${SS_RULESET:-}" ]; then
+            [ -f "$SS_RULESET" ] || { echo "::error::ruleset file not found: $SS_RULESET"; exit 2; }
+            REQ=$(jq -n --rawfile spec "$SS_SPEC" --rawfile rs "$SS_RULESET" \
+              --argjson policy "$POLICY" --arg org "$SS_ORG" \
+              '{spec: $spec, ruleset: $rs, policy: $policy}
+               | (if $org != "" then .orgKey = $org else . end)')
+          fi
+
+          TMP_REQ=$(mktemp); printf '%s' "$REQ" >"$TMP_REQ"
+          TMP_OUT=$(mktemp)
+          HTTP=$(curl -s -o "$TMP_OUT" -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/governance/gate" \
+            -H "X-Api-Key: $SPECSHIELD_API_KEY" -H "Content-Type: application/json" \
+            --data-binary "@$TMP_REQ")
+          OUT="$(cat "$TMP_OUT")"; rm -f "$TMP_OUT" "$TMP_REQ"
+
+          echo "::group::governance-gate ($HTTP)"; echo "$OUT"; echo "::endgroup::"
+
+          if [ "$HTTP" != "200" ]; then
+            MSG=$(echo "$OUT" | jq -r '.message // .error // .' 2>/dev/null || echo "$OUT")
+            echo "::error::governance-gate request failed (HTTP $HTTP): $MSG"
+            # 402 (plan) / 403 (org) / 400 (bad spec) are config errors → exit 2
+            exit 2
+          fi
+
+          PASSED=$(echo "$OUT" | jq -r '.passed')
+          SCORE=$(echo "$OUT"  | jq -r '.review.score.value // empty')
+          GRADE=$(echo "$OUT"  | jq -r '.review.score.grade // empty')
+          WAIVED=$(echo "$OUT" | jq -r '.waivedCount // 0')
+
+          {
+            DELIM="EOF_$(date +%s%N)"
+            echo "json<<$DELIM"; echo "$OUT"; echo "$DELIM"
+            echo "passed=$PASSED"
+            [ -n "$SCORE" ] && echo "score=$SCORE"
+            [ -n "$GRADE" ] && echo "grade=$GRADE"
+            echo "exit-code=$([ "$PASSED" = "true" ] && echo 0 || echo 1)"
+          } >>"$GITHUB_OUTPUT"
+
+          {
+            echo "### SpecShield: governance gate"
+            echo ""
+            if [ "$PASSED" = "true" ]; then
+              echo "✅ **Passed** — score **${SCORE:-?}** (grade **${GRADE:-?}**)${WAIVED:+, $WAIVED waived}"
+            else
+              echo "❌ **Blocked** — score **${SCORE:-?}** (grade **${GRADE:-?}**)"
+              echo ""
+              echo "**Reasons:**"
+              echo "$OUT" | jq -r '.reasons[]? | "- " + .' 2>/dev/null || true
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+
+          if [ "$PASSED" != "true" ]; then
+            echo "::error::Governance gate failed. $(echo "$OUT" | jq -r '.recommendedAction // empty')"
+            [ "$SS_FAIL_ON_ERROR" = "true" ] && exit 1
+          fi
+          exit 0
+        fi
 
         ARGS=(bdct "$SS_COMMAND" --json --org "$SS_ORG" --server "$SS_SERVER")
 

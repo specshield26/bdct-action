@@ -1,0 +1,30 @@
+# Block a PR when the OpenAPI spec fails the API-governance policy.
+# Runs the deploy gate: reviews the spec, scores it (0-100 + A-F), and fails the
+# check when the score is below the threshold or a policy rule is violated.
+name: API Governance Gate
+
+on:
+  pull_request:
+    paths:
+      - 'api/openapi.yaml'
+
+jobs:
+  governance-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Governance gate
+        uses: specshield26/bdct-action@v1
+        with:
+          command: governance-gate
+          spec: ./api/openapi.yaml
+          org: ${{ vars.SPECSHIELD_ORG }}   # optional — enables this org's waivers
+          min-score: '80'                   # default 70
+          fail-on-warning: 'false'          # default false
+          # ruleset: ./governance/ruleset.yaml   # optional custom portable ruleset
+          api-token: ${{ secrets.SPECSHIELD_API_KEY }}
+          # fail-on-error: 'false'   # set to inspect the verdict without failing the job
+
+      # The verdict is also available as step outputs:
+      #   steps.<id>.outputs.passed / .score / .grade / .json

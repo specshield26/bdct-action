@@ -62,6 +62,7 @@ The three idiomatic entry points are in [`examples/`](examples) — copy any of 
 | [`pr-check.yml`](examples/pr-check.yml)                           | Every pull request that changes the OpenAPI spec             | Verifies the change against published consumers and fails the check if it would break someone. |
 | [`publish-on-merge.yml`](examples/publish-on-merge.yml)           | Every push to `main`                                         | Publishes the latest provider spec; auto-verifies all known consumers. |
 | [`can-i-deploy-gate.yml`](examples/can-i-deploy-gate.yml)         | Just before the deploy step in your release workflow         | Hard-gates production deploys on contract compatibility. |
+| [`governance-gate.yml`](examples/governance-gate.yml)             | Every pull request that changes the OpenAPI spec             | Scores the spec against your API-governance policy and fails the check when it's below the threshold. |
 
 ---
 
@@ -69,8 +70,12 @@ The three idiomatic entry points are in [`examples/`](examples) — copy any of 
 
 | Input              | Required                          | Default                  | Description |
 | ------------------ | --------------------------------- | ------------------------ | ----------- |
-| `command`          | yes                               | —                        | One of `publish-provider`, `publish-consumer`, `verify`, `can-i-deploy`, `matrix`, `list-providers`, `list-consumers`. |
+| `command`          | yes                               | —                        | One of `publish-provider`, `publish-consumer`, `verify`, `can-i-deploy`, `matrix`, `list-providers`, `list-consumers`, `governance-gate`. |
 | `api-token`        | yes                               | —                        | Your SpecShield API key. Always pass via a secret. |
+| `spec`             | for `publish-provider`, `governance-gate` | —                | Path to the OpenAPI spec file. |
+| `min-score`        | for `governance-gate` (optional)  | `70`                     | Minimum compliance score (0–100) required to pass the gate. |
+| `fail-on-warning`  | for `governance-gate` (optional)  | `false`                  | Fail when any warning-severity finding is present. |
+| `ruleset`          | for `governance-gate` (optional)  | —                        | Path to a custom portable (Spectral-format) ruleset; omit for the built-in ruleset. |
 | `org`              | yes                               | —                        | Organization key. Required by every backend endpoint. |
 | `provider`         | command-dependent                 | —                        | Provider service name. |
 | `consumer`         | command-dependent                 | —                        | Consumer service name. |
