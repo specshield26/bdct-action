@@ -88,7 +88,7 @@ The three idiomatic entry points are in [`examples/`](examples) — copy any of 
 | `format`           | optional, for `publish-consumer`  | `OPENAPI`                | Contract format: `OPENAPI` or `PACT`. |
 | `branch`           | optional                          | —                        | Git branch tag stored alongside a provider spec (purely informational). |
 | `env`              | optional                          | —                        | Environment label (e.g. `staging`, `production`). |
-| `cli-version`      | optional                          | `3.2.1`                  | npm version of the `specshield` CLI to install. Pinned by default for reproducible builds; pass `latest` to follow the newest published release. |
+| `cli-version`      | optional                          | `~3.4.0`                 | npm version of the `specshield` CLI to install. Defaults to a semver range, so 3.4.x patch releases roll out automatically while the minor stays pinned. Pass an exact version (e.g. `3.4.2`) for a fully reproducible build, or `latest` to follow the newest published release. |
 | `server`           | optional                          | `https://specshield.io`  | API base URL. Override only for self-hosted or staging environments. |
 | `fail-on-error`    | optional                          | `true`                   | Set `false` if you want to inspect outputs in a later step before failing the job. |
 
@@ -151,8 +151,10 @@ This action follows [GitHub's recommended major-version pattern](https://docs.gi
 
 | `cli-version` | Notes                                                                                |
 | ------------- | ------------------------------------------------------------------------------------ |
-| `3.2.1` *(default)* | Latest. Includes the diff-engine fixes shipped 2026-05-19 (additions/modifications visible by default, schema-component dedupe via `affectedEndpoints`, constraint detection, OpenAPI input validation, Java POM `<parent>` skip, `init --print` no-prompt). |
-| `3.1.x`       | Earlier-pinned default. Full BDCT + `specshield init` wizard + `.specshield.yml` config defaulting. Compatible with the action; missing the 2026-05-19 diff fixes. |
+| `~3.4.0` *(default)* | Current. Resolves to the newest published 3.4.x. Adds `specshield govern` (API governance linting), the endpoint shown alongside the field in `bdct verify` issue lines, and a clearer missing-required-options error. |
+| `3.3.x`       | Earlier-pinned default. Full BDCT + governance gate. Compatible with the action; `bdct verify` issue lines omit the endpoint, so two findings on the same field look identical. |
+| `3.2.x`       | Includes the diff-engine fixes shipped 2026-05-19 (additions/modifications visible by default, schema-component dedupe via `affectedEndpoints`, constraint detection, OpenAPI input validation). |
+| `3.1.x`       | Full BDCT + `specshield init` wizard + `.specshield.yml` config defaulting. Compatible with the action; missing the 2026-05-19 diff fixes. |
 | `3.0.x`       | Full BDCT but the action's `--json` exit-code path returns 0 even when `deployable: false`. **Avoid** — use `3.1.x` or newer. |
 | `<3.0`        | **Not supported.**                                                                    |
 
