@@ -14,7 +14,7 @@ jobs:
       deployable: ${{ steps.gate.outputs.deployable }}
     steps:
       - id: gate
-        uses: specshield26/bdct-action@v1
+        uses: specshield-io/bdct-action@v1
         with:
           command: can-i-deploy
           org: ${{ vars.SPECSHIELD_ORG }}

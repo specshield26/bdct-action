@@ -8,7 +8,7 @@ Publish provider OpenAPI specs, publish consumer contracts, verify compatibility
 with `can-i-deploy` — all without hand-writing the YAML.
 
 ```yaml
-- uses: specshield26/bdct-action@v1
+- uses: specshield-io/bdct-action@v1
   with:
     command: can-i-deploy
     org: ${{ vars.SPECSHIELD_ORG }}
@@ -108,7 +108,7 @@ The three idiomatic entry points are in [`examples/`](examples) — copy any of 
 
 ```yaml
 - id: gate
-  uses: specshield26/bdct-action@v1
+  uses: specshield-io/bdct-action@v1
   with:
     command: can-i-deploy
     org: ${{ vars.SPECSHIELD_ORG }}

@@ -16,7 +16,7 @@ jobs:
       # 1. Publish the candidate spec under a PR-scoped version so it can be verified
       #    against the existing consumer contracts without overwriting the main spec.
       - name: Publish PR-scoped provider spec
-        uses: specshield26/bdct-action@v1
+        uses: specshield-io/bdct-action@v1
         with:
           command: publish-provider
           org: ${{ vars.SPECSHIELD_ORG }}
@@ -34,7 +34,7 @@ jobs:
       #    real verdict.
       - id: gate
         name: Can I deploy this PR's provider?
-        uses: specshield26/bdct-action@v1
+        uses: specshield-io/bdct-action@v1
         with:
           command: can-i-deploy
           org: ${{ vars.SPECSHIELD_ORG }}

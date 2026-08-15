@@ -42,7 +42,7 @@ jobs:
 
       - name: Examples reference @v1
         run: |
-          if grep -RnE 'specshield26/bdct-action@(main|master)\b' examples; then
+          if grep -RnE 'specshield-io/bdct-action@(main|master)\b' examples; then
             echo "::error::Examples must use @v1 (or a pinned @vX.Y.Z), not @main."
             exit 1
           fi

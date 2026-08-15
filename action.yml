@@ -170,6 +170,23 @@ runs:
             ;;
         esac
 
+        # ── Required inputs ────────────────────────────────────────────────
+        # GitHub does NOT enforce `required: true` for composite actions — it is
+        # documentation only. An unset repo variable or secret silently expands to
+        # an empty string, so without this the CLI is invoked as `--org ""` and
+        # fails with a bare "exited with code 2" that names nothing. The most
+        # common cause by far is SPECSHIELD_ORG never being added as a repository
+        # *Variable* (it is not a Secret).
+        if [ -z "${SS_ORG:-}" ]; then
+          echo "::error::'org' is empty. Set the SPECSHIELD_ORG repository variable (Settings → Secrets and variables → Actions → Variables), or pass org: directly. Find your org key in the SpecShield dashboard under Team → Organization key."
+          exit 2
+        fi
+
+        if [ -z "${SPECSHIELD_API_KEY:-}" ]; then
+          echo "::error::'api-token' is empty. Add SPECSHIELD_API_KEY as a repository Secret (Settings → Secrets and variables → Actions → Secrets) and pass it to the api-token input."
+          exit 2
+        fi
+
         # ── governance-gate: call the governance deploy gate directly (no CLI dep) ──
         # Fails the job when the gate verdict is `passed=false`, so a PR can be blocked
         # on API-governance policy. Spec is read from the `spec` input (a file path).

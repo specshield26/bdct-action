@@ -1,6 +1,6 @@
 # Smoke test for the PUBLISHED action at @v1.
 # Different from test.yml (which uses `./` and exercises the local source).
-# This one fetches `specshield26/bdct-action@v1` exactly the way an external
+# This one fetches `specshield-io/bdct-action@v1` exactly the way an external
 # customer would, and proves the whole chain resolves: tag → release →
 # composite step → npm install of the pinned CLI → action wrapper → CLI call.
 #
@@ -27,17 +27,17 @@ jobs:
     steps:
       - name: Show what we're testing
         run: |
-          echo "Testing specshield26/bdct-action@v1 → expects to resolve to v1.0.3"
+          echo "Testing specshield-io/bdct-action@v1 → expects to resolve to the latest v1.0.x"
           echo "Expected behavior:"
-          echo "  · setup-node + npm install -g specshield@3.2.1 succeeds"
-          echo "  · 'specshield --version' prints 3.2.1"
+          echo "  · setup-node + npm install -g specshield@~3.4.0 succeeds"
+          echo "  · 'specshield --version' prints the latest published 3.4.x"
           echo "  · 'specshield bdct list-providers' is reached and returns a real API response"
           echo "  · with no real credentials, the API returns 401 and the step fails — that's the success criterion."
 
       # Use the published action exactly as a customer would.
       - name: list-providers via published action
         id: action
-        uses: specshield26/bdct-action@v1
+        uses: specshield-io/bdct-action@v1
         continue-on-error: true        # we expect a 401 with the dummy key
         with:
           command: list-providers

@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Governance gate
-        uses: specshield26/bdct-action@v1
+        uses: specshield-io/bdct-action@v1
         with:
           command: governance-gate
           spec: ./api/openapi.yaml

@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Publish provider spec
-        uses: specshield26/bdct-action@v1
+        uses: specshield-io/bdct-action@v1
         with:
           command: publish-provider
           org: ${{ vars.SPECSHIELD_ORG }}
@@ -33,7 +33,7 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - uses: specshield26/bdct-action@v1
+  #     - uses: specshield-io/bdct-action@v1
   #       with:
   #         command: publish-consumer
   #         org: ${{ vars.SPECSHIELD_ORG }}
